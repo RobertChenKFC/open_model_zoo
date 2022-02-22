@@ -159,7 +159,6 @@ class Dataset:
 
         if use_converted_annotation and contains_all(config, ['annotation', 'annotation_conversion']):
             _save_annotation()
-
         return annotation, meta
 
     def send_annotation_info(self, config):
@@ -200,6 +199,11 @@ class Dataset:
 
     def create_data_provider(self):
         annotation, meta = self.load_annotation(self.config)
+        # Originally, annotation was recorded as a member variable and can be
+        # retrieved via a method, now this code is removed (possibly because
+        # load_annotation is now a static method). We add the code back.
+        self.annotation = annotation
+
         data_reader_config = self.config.get('reader', 'opencv_imread')
         data_source = self.config.get('data_source')
         if isinstance(data_reader_config, str):

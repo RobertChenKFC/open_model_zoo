@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import numpy as np
+
+from edgetpu_pass.utils.cpu import get_num_cpu
 from .launcher import Launcher
 from ..config import BaseField, ListField, PathField, StringField, ConfigError
 
@@ -51,12 +53,24 @@ class TF2Launcher(Launcher):
         self._delayed_model_loading = kwargs.get('delayed_model_loading', False)
         self.validate_config(config_entry, delayed_model_loading=self._delayed_model_loading)
 
-        if not self._delayed_model_loading:
-            if 'saved_model_dir' not in self.config:
-                raise ConfigError('saved model directory should be provided')
+        # Enable memory growth so that the model inference can run
+        # successfully on the GPU
+        physical_devices = self.tf.config.experimental.list_physical_devices(
+            'GPU'
+        )
+        if len(physical_devices) > 0:
+            self.tf.config.experimental.set_memory_growth(
+                physical_devices[0], True
+            )
 
-            self._config_outputs = self.get_value_from_config('output_names')
-            self._model_fn = self._load_saved_model(str(self.get_value_from_config('saved_model_dir')))
+        # We ignore _delayed_model_loading and load the model regardless,
+        # otherwise error is raised when other methods are called
+        if 'saved_model_dir' not in self.config:
+            raise ConfigError('saved model directory should be provided')
+
+        self._config_outputs = self.get_value_from_config('output_names')
+        self._model_fn = self._load_saved_model(str(self.get_value_from_config('saved_model_dir')))
+
         self.device = '/{}:0'.format(self.get_value_from_config('device').lower())
 
     def predict(self, inputs, metadata=None, **kwargs):
@@ -67,14 +81,16 @@ class TF2Launcher(Launcher):
         Returns:
             raw data from network.
         """
-        results = []
-        for infer_input in inputs:
-            outputs = self._model_fn(**infer_input)
-            res = {key: value.numpy() for key, value in outputs.items()}
-            results.append(res)
-            if metadata is not None:
-                for meta_ in metadata:
-                    meta_['input_shape'] = self.inputs_info_for_meta(infer_input)
+        # Run the model on the correct device
+        with self.tf.device(self.device):
+            results = []
+            for infer_input in inputs:
+                outputs = self._model_fn(**infer_input)
+                res = {key: value.numpy() for key, value in outputs.items()}
+                results.append(res)
+                if metadata is not None:
+                    for meta_ in metadata:
+                        meta_['input_shape'] = self.inputs_info_for_meta(infer_input)
 
         return results
 

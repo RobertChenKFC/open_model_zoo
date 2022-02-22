@@ -46,6 +46,7 @@ class ModelEvaluator(BaseEvaluator):
         self.adapter = adapter
         self.preprocessor = preprocessor
         self.postprocessor = postprocessor
+
         self.dataset = dataset
         self.metric_executor = metric
         self.process_dataset = self.process_dataset_sync if not async_mode else self.process_dataset_async

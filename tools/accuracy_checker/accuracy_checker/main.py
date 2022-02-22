@@ -393,12 +393,27 @@ def main():
         send_telemetry_event(tm, 'error', 'Unknown evaluation mode')
         end_telemetry(tm)
         raise ValueError('Unknown evaluation mode')
-    for config_entry in config[mode]:
+
+    # Modified so that the stored predictions can accept a comma separated
+    # list of paths
+    if args.stored_predictions is None:
+        stored_predictions = [None] * len(config[mode])
+    else:
+        stored_predictions = args.stored_predictions.split(",")
+
+    # Assign one stored prediction to every configuration entry
+    if len(stored_predictions) != len(config[mode]):
+        raise RuntimeError("The number of paths provided via "
+                           "stored_predictions must equal the number of "
+                           "evaluator configurations.")
+    for config_entry, stored_prediction in zip(
+        config[mode], stored_predictions
+    ):
         details.update({'status': 'started', "error": None})
         send_telemetry_event(tm, 'status', 'started')
         config_entry.update({
             '_store_only': args.store_only,
-            '_stored_data': args.stored_predictions
+            '_stored_data': stored_prediction
         })
         try:
             processing_info = evaluator_class.get_processing_info(config_entry)
@@ -409,7 +424,8 @@ def main():
                 setup_profiling(args.profiler_logs_dir, evaluator)
             send_telemetry_event(tm, 'model_run', json.dumps(details))
             evaluator.process_dataset(
-                stored_predictions=args.stored_predictions, progress_reporter=progress_reporter, **evaluator_kwargs
+                stored_predictions=stored_prediction,
+                progress_reporter=progress_reporter, **evaluator_kwargs
             )
             if not args.store_only:
                 metrics_results, metrics_meta = evaluator.extract_metrics_results(
@@ -431,7 +447,8 @@ def main():
             send_telemetry_event(tm, 'model_run', json.dumps(details))
             exception(e)
             return_code = 1
-            continue
+            # Change to "exit if one of the model evaluation fails"
+            break
         end_telemetry(tm)
     sys.exit(return_code)
 
