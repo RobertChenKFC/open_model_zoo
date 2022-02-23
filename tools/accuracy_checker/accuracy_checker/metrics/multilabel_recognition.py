@@ -226,8 +226,22 @@ class F1Score(PerImageEvaluationMetric):
         precisions = self.precision.evaluate(annotations, predictions)
         recalls = self.recall.evaluate(annotations, predictions)
 
-        precision_add = np.add(precisions[:-1], recalls[:-1], dtype=float)
-        precision_multiply = np.multiply(precisions[:-1], recalls[:-1], dtype=float)
+        # The original code always excludes the last element, but the last
+        # element should only be excluded when calculate_average is True (in
+        # this case, the last element is the average). We modify the code to the
+        # correct one.
+        if self.calculate_average:
+            per_class_precisions = precisions[:-1]
+            per_class_recalls = recalls[:-1]
+        else:
+            per_class_precisions = precisions
+            per_class_recalls = recalls
+        precision_add = np.add(
+            per_class_precisions, per_class_recalls, dtype=float
+        )
+        precision_multiply = np.multiply(
+            per_class_precisions, per_class_recalls, dtype=float
+        )
 
         per_class = 2 * np.divide(
             precision_multiply, precision_add, out=np.zeros_like(precision_multiply, dtype=float),

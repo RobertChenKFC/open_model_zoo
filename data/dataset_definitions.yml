@@ -339,6 +339,15 @@ datasets:
     annotation: person_8_attributes.pickle
     dataset_meta: person_8_attributes.json
 
+  # Market1501-Attributes dataset added for model person_attributes
+  - name: person_attributes
+    data_source: Market-1501-v15.09.15
+    annotation_conversion:
+      converter: market1501_attributes
+      data_dir: Market-1501-v15.09.15
+    annotation: person_attributes.pickle
+    dataset_meta: person_attributes.json
+
   - name: vehicle_license_plate_detection
     data_source: ILSVRC2012_img_val
     annotation_conversion:

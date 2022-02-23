@@ -52,8 +52,8 @@ class TFLiteLauncher(Launcher):
         self.validate_config(config_entry, delayed_model_loading=self._delayed_model_loading)
         # We ignore _delayed_model_loading and load the model regardless,
         # otherwise error is raised when other methods are called
-        self._input_details = self.model.interpreter.get_input_details()
-        self._output_details = self.model.interpreter.get_output_details()
+        self._input_details = self.model.get_interpreter().get_input_details()
+        self._output_details = self.model.get_interpreter().get_output_details()
         self._inputs = {input_layer['name']: input_layer for input_layer in self._input_details}
         self.device = '/{}:0'.format(self.config.get('device', 'cpu').lower())
 

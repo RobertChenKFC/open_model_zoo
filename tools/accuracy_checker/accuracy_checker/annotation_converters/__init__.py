@@ -17,6 +17,7 @@ limitations under the License.
 from .format_converter import BaseFormatConverter
 from .convert import make_subset, save_annotation, analyze_dataset, DatasetConversionInfo
 from .market1501 import Market1501Converter
+from .market1501_attributes import Market1501AttributesConverter
 from .veri776 import VeRi776Converter
 from .mars import MARSConverter
 from .pascal_voc import PascalVOCDetectionConverter
@@ -216,5 +217,8 @@ __all__ = [
     'LabelMeSegmentationConverter',
     'DatasetFolderConverter',
     'OpenImagesDetectionConverter',
-    'KSpaceMRIConverter'
+    'KSpaceMRIConverter',
+
+    # DEBUG
+    "Market1501AttributesConverter"
 ]
