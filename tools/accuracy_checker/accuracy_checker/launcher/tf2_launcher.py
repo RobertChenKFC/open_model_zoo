@@ -13,11 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-import os
-
 import numpy as np
 
-from edgetpu_pass.utils.cpu import get_num_cpu
 from .launcher import Launcher
 from ..config import BaseField, ListField, PathField, StringField, ConfigError
 
@@ -71,7 +68,6 @@ class TF2Launcher(Launcher):
 
         self._config_outputs = self.get_value_from_config('output_names')
         self._model_fn = self._load_saved_model(str(self.get_value_from_config('saved_model_dir')))
-
         self.device = '/{}:0'.format(self.get_value_from_config('device').lower())
 
     def predict(self, inputs, metadata=None, **kwargs):
@@ -141,18 +137,8 @@ class TF2Launcher(Launcher):
     def _load_saved_model(self, model_dir):
         self._loaded = self.tf.saved_model.load(model_dir)
         self._model_fn = self._loaded.signatures["serving_default"]
-
-        # We choose to load the model using keras if the variables directory
-        # is non-empty, because when such models are loaded using
-        # tf.saved_model.load, the input tensors are messed up.
-        variables_dir = os.path.join(model_dir, "variables")
-        if (
-            os.path.exists(variables_dir) and
-            len(os.listdir(variables_dir)) != 0
-        ):
-            self._inputs = self.tf.keras.models.load_model(model_dir).inputs
-        else:
-            self._inputs = self._model_fn.inputs
+        _, kw_args = self._model_fn.structured_input_signature
+        self._inputs = kw_args.values()
         return self._model_fn
 
     def _get_inputs(self):

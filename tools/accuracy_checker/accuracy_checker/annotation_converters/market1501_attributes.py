@@ -14,7 +14,7 @@ class Market1501AttributesConverter(DirectoryBasedAnnotationConverter):
     def configure(self):
         super().configure()
         self.market_attributes_path = CONFIG.get(
-            "Market1501 Attributes", "path"
+            "Market1501 Attributes Dataset", "path"
         )
 
     def convert(self, check_content=False, progress_callback=None, progress_interval=100, **kwargs):
