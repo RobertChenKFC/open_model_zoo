@@ -115,7 +115,7 @@ class ConfigReader:
             dictionary containing configuration.
         """
 
-        global_config, local_config = ConfigReader._read_configs(arguments)
+        global_config, local_config = ConfigReader.read_configs(arguments)
         if not local_config:
             raise ConfigError('Missing local config')
 
@@ -138,7 +138,7 @@ class ConfigReader:
         ConfigReader._previous_configuration_parameters_sharing(config, mode)
 
     @staticmethod
-    def _read_configs(arguments):
+    def read_configs(arguments):
         local_config = read_yaml(arguments.config)
         if not isinstance(local_config, dict):
             raise ConfigError('local config should be dict-like object')

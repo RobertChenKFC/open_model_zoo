@@ -1314,6 +1314,16 @@ datasets:
     additional_data_source: PASCAL-S/mask
     annotation: pascal-s.pickle
 
+  # DUTS-TE dataset added for model u2_net
+  - name: DUTS-TE
+    annotation_conversion:
+      converter: salient_object_detection
+      images_dir: DUTS-TE/DUTS-TE-Image
+      masks_dir: DUTS-TE/DUTS-TE-Mask
+    data_source: DUTS-TE/DUTS-TE-Image
+    additional_data_source: DUTS-TE/DUTS-TE-Mask
+    annotation: duts-te.pickle
+
   - name: LibriSpeech_test_clean_npy_nemo
     data_source: librispeech/test/LibriSpeech/test-clean.npy
     annotation: librispeech_npy.pickle

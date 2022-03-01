@@ -40,7 +40,22 @@ class SalientObjectDetection(Adapter):
             self.salient_map_output = self.output_blob
         result = []
         for identifier, mask in zip(identifiers, raw_output[self.salient_map_output]):
-            mask = 1/(1 + np.exp(-mask))
-            result.append(SalientRegionPrediction(identifier, np.round(np.squeeze(mask)).astype(np.uint8)))
-
+            # For some reason, the original code applied the sigmoid function
+            # to the mask before using it (maybe the model didn't contain the
+            # sigmoid layer). We removed the code.
+            #
+            # Also, the original code rounded the mask, effectively doing the
+            # thresholding (of 0.5, since it used np.round) and returning a
+            # binary map. We eliminate that so that the original floating
+            # point probability map is returned.
+            #
+            # Note that, however, that the prediction map received when
+            # calculating the metrics is not the floating point map returned
+            # here, but rather the quantized (to 0-255) version of this map.
+            # (check out ResizeSegmentationMask._bytescale in
+            # resize_segmentation_mask.py for more detail). Therefore,
+            # we change the annotation mask so that it also returns a 0-255 map
+            # (check out SalientMapNormalizer.process_image in
+            # normalize_salient_map.py for more detail).
+            result.append(SalientRegionPrediction(identifier, np.squeeze(mask)))
         return result

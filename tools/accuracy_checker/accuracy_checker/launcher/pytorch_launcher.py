@@ -48,7 +48,10 @@ class PyTorchLauncher(Launcher):
                 description='keyword arguments for network module'
             ),
             'device': StringField(default='cpu', regex=DEVICE_REGEX),
-            'batch': NumberField(value_type=float, min_value=1, optional=True, description="Batch size.", default=1),
+            # Batch size should be an integer, otherwise causes bug with
+            # indexing
+            'batch': NumberField(value_type=int, min_value=1, optional=True,
+                                 description="Batch size.", default=1),
             'output_names': ListField(
                 optional=True, value_type=str, description='output tensor names'
             )

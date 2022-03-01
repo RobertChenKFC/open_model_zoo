@@ -17,7 +17,7 @@ import numpy as np
 import tflite_runtime.interpreter
 
 from edgetpu_pass.model.tflite_model import TFLiteModel
-from edgetpu_pass.utils.cpu import get_num_cpu
+from edgetpu_pass.utils.misc import get_num_cpu
 from .launcher import Launcher, ListInputsField
 from ..config import PathField, StringField
 

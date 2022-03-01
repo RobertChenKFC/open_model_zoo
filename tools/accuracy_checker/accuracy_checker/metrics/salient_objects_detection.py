@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import numpy as np
+import torch
+
 from .metric import PerImageEvaluationMetric
 from ..representation import SalientRegionAnnotation, SalientRegionPrediction
 
@@ -31,18 +33,23 @@ class SalienceMapMAE(PerImageEvaluationMetric):
             'scale': 1,
             'postfix': ' ',
             'calculate_mean': False,
-            'target': 'higher-worse'
+            'target': 'higher-worse',
+            'data_format': "{:.4f}"
         })
         self.cnt = 0
 
     def update(self, annotation, prediction):
         self.cnt += 1
-        if np.max(annotation.mask) == 0 or np.max(prediction.mask) == 0:
-            return 0
-        foreground_pixels = prediction.mask[np.where(annotation.mask)]
-        foreground_error = np.size(foreground_pixels) - np.sum(foreground_pixels)
-        background_error = np.sum(prediction.mask[np.where(~annotation.mask)])
-        mae = (foreground_error + background_error) / np.size(annotation.mask)
+        # The original code is complicated and looks incorrect. We change it
+        # to calculate the correct metric. Note that the maps are both 0-255
+        # now, so we need to divide both maps by 255, or simply divide the
+        # calculated MAE
+        mae = np.mean(
+            np.abs(
+                annotation.mask.astype(np.float32) -
+                prediction.mask.astype(np.float32)
+            )
+        ) / 255.0
         self.errors.append(mae)
         return mae
 
@@ -68,17 +75,21 @@ class SalienceMapFMeasure(PerImageEvaluationMetric):
         })
 
     def update(self, annotation, prediction):
-        sum_label = 2 * np.mean(prediction.mask)
+        # Both maps are now 0-255, so we divide both maps by 255 before using
+        annotation_mask = annotation.mask.astype(np.float32) / 255.0
+        prediction_mask = prediction.mask.astype(np.float32) / 255.0
+
+        sum_label = 2 * np.mean(prediction_mask)
         if sum_label > 1:
             sum_label = 1
 
-        label3 = np.zeros_like(annotation.mask)
-        label3[prediction.mask >= sum_label] = 1
+        label3 = np.zeros_like(annotation_mask)
+        label3[prediction_mask >= sum_label] = 1
 
         num_recall = np.sum(label3 == 1)
-        label_and = np.logical_and(label3, annotation.mask)
+        label_and = np.logical_and(label3, annotation_mask)
         num_and = np.sum(label_and == 1)
-        num_obj = np.sum(annotation.mask)
+        num_obj = np.sum(annotation_mask)
 
         if num_and == 0:
             self.recalls.append(0)
@@ -100,6 +111,65 @@ class SalienceMapFMeasure(PerImageEvaluationMetric):
         self.recalls, self.precisions, self.fmeasure = [], [], []
 
 
+class SalienceMapMaxFMeasure(PerImageEvaluationMetric):
+    __provider__ = 'salience_max-f-measure'
+    annotation_types = (SalientRegionAnnotation, )
+    prediction_types = (SalientRegionPrediction, )
+
+    def configure(self):
+        self.recalls, self.precisions, self.fmeasure = [], [], []
+        self.meta.update({
+            'names': ['f-measure', 'recall', 'precision'],
+            'calculate_mean': False,
+        })
+
+    def update(self, annotation, prediction):
+        # Both maps are now 0-255, so we divide both maps by 255 before using
+        annotation_mask = annotation.mask.astype(np.float32) / 255.0
+        prediction_mask = prediction.mask.astype(np.float32) / 255.0
+
+        # We use PyTorch CUDA to speedup evaluation, even though it is not
+        # necessary
+        sum_labels = torch.reshape(torch.arange(0, 256) / 255.0, (256, 1, 1)).cuda()
+        prediction_mask = torch.tensor(prediction_mask).cuda()
+        label3 = torch.tile(prediction_mask, (256, 1, 1)) >= sum_labels
+
+        annotation_mask = torch.tensor(annotation_mask).cuda()
+        mask = torch.unsqueeze(annotation_mask, 0)
+        num_recalls = torch.sum(label3, dim=(1, 2))
+        label_ands = torch.logical_and(label3, mask)
+        num_ands = torch.sum(label_ands, dim=(1, 2))
+        num_objs = torch.sum(annotation_mask)
+
+        precisions = torch.divide(num_ands, num_recalls)
+        precisions[precisions != precisions] = 0
+        recalls = torch.div(num_ands, num_objs)
+        recalls[recalls != recalls] = 0
+        fmeasures = torch.div(
+            1.3 * precisions * recalls, 0.3 * precisions + recalls
+        )
+        fmeasures[fmeasures != fmeasures] = 0
+
+        precisions = precisions.cpu().detach()
+        recalls = recalls.cpu().detach()
+        fmeasures = fmeasures.cpu().detach()
+
+        index = np.argmax(fmeasures)
+        recall = recalls[index]
+        precision = precisions[index]
+        fmeasure = fmeasures[index]
+        self.recalls.append(recall)
+        self.precisions.append(precision)
+        self.fmeasure.append(fmeasure)
+        return fmeasure
+
+    def evaluate(self, annotations, predictions):
+        return np.mean(self.fmeasure), np.mean(self.recalls), np.mean(self.precisions)
+
+    def reset(self):
+        self.recalls, self.precisions, self.fmeasure = [], [], []
+
+
 class SalienceEMeasure(PerImageEvaluationMetric):
     __provider__ = 'salience_e-measure'
     annotation_types = (SalientRegionAnnotation, )
@@ -109,14 +179,18 @@ class SalienceEMeasure(PerImageEvaluationMetric):
         self.scores = []
 
     def update(self, annotation, prediction):
-        if np.sum(annotation.mask) == 0:
-            enhance_matrix = 1 - prediction.mask
-        elif np.sum(~annotation.mask) == 0:
-            enhance_matrix = prediction.mask
+        # Both maps are now 0-255, so we divide both maps by 255 before using
+        annotation_mask = annotation.mask.astype(np.float32) / 255.0
+        prediction_mask = prediction.mask.astype(np.float32) / 255.0
+
+        if np.sum(annotation_mask) == 0:
+            enhance_matrix = 1 - prediction_mask
+        elif np.sum(~annotation_mask.astype(np.bool)) == 0:
+            enhance_matrix = prediction_mask
         else:
-            align_matrix = self.alignment_term(prediction.mask, annotation.mask)
+            align_matrix = self.alignment_term(prediction_mask, annotation_mask)
             enhance_matrix = ((align_matrix + 1)**2) / 4
-        h, w = annotation.mask.shape[:2]
+        h, w = annotation_mask.shape[:2]
         score = np.sum(enhance_matrix)/(w * h + np.finfo(float).eps)
         self.scores.append(score)
         return score
@@ -147,8 +221,12 @@ class SalienceSMeasure(PerImageEvaluationMetric):
         self.scores = []
 
     def update(self, annotation, prediction):
-        y = np.mean(annotation.mask)
-        x = np.mean(prediction.mask)
+        # Both maps are now 0-255, so we divide both maps by 255 before using
+        annotation_mask = annotation.mask.astype(np.float32) / 255.0
+        prediction_mask = prediction.mask.astype(np.float32) / 255.0
+
+        y = np.mean(annotation_mask)
+        x = np.mean(prediction_mask)
         if y == 0:
             self.scores.append(1 - x)
             return 1 - x
@@ -156,7 +234,8 @@ class SalienceSMeasure(PerImageEvaluationMetric):
             self.scores.append(x)
             return x
         score = 0.5 * (
-            self.s_object(prediction.mask, annotation.mask) + self.s_region(prediction.mask, annotation.mask)
+            self.s_object(prediction_mask, annotation_mask) +
+            self.s_region(prediction_mask, annotation_mask)
         )
         self.scores.append(score)
         return score

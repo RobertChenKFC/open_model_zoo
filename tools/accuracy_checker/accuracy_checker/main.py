@@ -402,13 +402,35 @@ def main():
     else:
         stored_predictions = args.stored_predictions.split(",")
 
-    # Assign one stored prediction to every configuration entry
-    if len(stored_predictions) != len(config[mode]):
-        raise RuntimeError("The number of paths provided via "
-                           "stored_predictions must equal the number of "
-                           "evaluator configurations.")
+    # Assign one stored prediction to every launcher
+    model_configs = ConfigReader.read_configs(args)[1]["models"][0]
+    launchers = model_configs["launchers"]
+    if len(stored_predictions) != len(launchers):
+        raise RuntimeError(f"The number of paths provided via "
+                           f"stored_predictions ({len(stored_predictions)}) "
+                           f"must equal the number of launcher "
+                           f"configurations ({len(launchers)}).")
+
+    # An example of the order of the generated configs: if there are three
+    # launchers A, B, C and two datasets D, E, the configs are in such order:
+    #   - Config for Model A Dataset D
+    #   - Config for Model A Dataset E
+    #   - Config for Model B Dataset D
+    #   - Config for Model B Dataset E
+    #   - Config for Model C Dataset D
+    #   - Config for Model C Dataset E
+    # Thus, we have to generate the corresponding prediction paths for each
+    # dataset:
+    full_stored_predictions = []
+    for launcher, stored_prediction in zip(launchers, stored_predictions):
+        for dataset in model_configs["datasets"]:
+            dataset_name = dataset["name"]
+            prediction_path, ext = os.path.splitext(stored_prediction)
+            full_prediction_path = f"{prediction_path}_{dataset_name}{ext}"
+            full_stored_predictions.append(full_prediction_path)
+
     for config_entry, stored_prediction in zip(
-        config[mode], stored_predictions
+        config[mode], full_stored_predictions
     ):
         details.update({'status': 'started', "error": None})
         send_telemetry_event(tm, 'status', 'started')
