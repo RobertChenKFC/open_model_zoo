@@ -231,13 +231,35 @@ class DUCSegmentationAdapter(Adapter):
 class BackgroundMattingAdapter(Adapter):
     __provider__ = 'background_matting'
 
+    @classmethod
+    def parameters(cls):
+        parameters = super().parameters()
+        parameters.update({
+            'binary_map': BoolField(
+                description="Output layer is a binary probability map, "
+                            "thus reduce it to a single value for each pixel.",
+                optional=True, default=False
+            )
+        })
+        return parameters
+
+    def configure(self):
+        super().configure()
+        self.binary_map = self.get_value_from_config("binary_map")
+
     def process(self, raw, identifiers, frame_meta):
         result = []
         frame_meta = frame_meta or [] * len(identifiers)
         raw_outputs = self._extract_predictions(raw, frame_meta)
         self.select_output_blob(raw_outputs)
         for identifier, output in zip(identifiers, raw_outputs[self.output_blob]):
-            output *= 255
-            result.append(BackgroundMattingPrediction(identifier, output.astype(np.uint8)))
+            if self.binary_map:
+                prob_max = np.max(output, axis=2, keepdims=True)
+                output -= prob_max
+                output = np.exp(output[:, :, 1]) / (
+                    np.exp(output[:, :, 0]) + np.exp(output[:, :, 1])
+                )
+            output = (output * 255).astype(np.uint8)
+            result.append(BackgroundMattingPrediction(identifier, output))
 
         return result

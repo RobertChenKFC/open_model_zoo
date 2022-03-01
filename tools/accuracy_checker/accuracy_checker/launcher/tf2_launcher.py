@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import traceback
+
 import numpy as np
 
 from .launcher import Launcher
@@ -88,7 +90,6 @@ class TF2Launcher(Launcher):
                 if metadata is not None:
                     for meta_ in metadata:
                         meta_['input_shape'] = self.inputs_info_for_meta(infer_input)
-
         return results
 
     def fit_to_input(self, data, layer_name, layout, precision):

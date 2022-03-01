@@ -195,6 +195,11 @@ def add_tool_settings_args(parser):
         required=False
     )
     tool_settings_args.add_argument(
+        '--reset',
+        help='delete predictions file if it exists and rerun predictions',
+        action="store_true"
+    )
+    tool_settings_args.add_argument(
         '--csv_result',
         help='file for results writing',
         required=False,
@@ -432,6 +437,10 @@ def main():
     for config_entry, stored_prediction in zip(
         config[mode], full_stored_predictions
     ):
+        if args.reset:
+            if stored_prediction and os.path.exists(stored_prediction):
+                os.unlink(stored_prediction)
+
         details.update({'status': 'started', "error": None})
         send_telemetry_event(tm, 'status', 'started')
         config_entry.update({

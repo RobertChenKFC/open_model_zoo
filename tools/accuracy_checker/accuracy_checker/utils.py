@@ -1,5 +1,5 @@
 """
-Copyright (c) 2018-2021 Intel Corporation
+Copyright (c) 2018-2022 Intel Corporation
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import errno
 import itertools
 import json
 import os
-import pickle
+import pickle # nosec - disable B403:import-pickle check
 import struct
 import sys
 import zlib
@@ -50,8 +50,8 @@ def concat_lists(*lists):
 def get_path(entry: Union[str, Path], is_directory=False, check_exists=True, file_or_directory=False):
     try:
         path = Path(entry)
-    except TypeError:
-        raise TypeError('"{}" is expected to be a path-like'.format(entry))
+    except TypeError as type_err:
+        raise TypeError('"{}" is expected to be a path-like'.format(entry)) from type_err
 
     if not check_exists:
         return path
@@ -96,6 +96,7 @@ def string_to_tuple(string, casting_type=float):
     processed = processed.replace('(', '')
     processed = processed.replace(')', '')
     processed = processed.split(',')
+    processed = filter(lambda x: x, processed)
 
     return tuple(map(casting_type, processed)) if casting_type else tuple(processed)
 
@@ -276,15 +277,21 @@ def is_path(data):
     return isinstance(data, (Path, str))
 
 
-def read_txt(file: Union[str, Path], sep='\n', **kwargs):
+def read_txt(file: Union[str, Path], sep='\n', ignore_space=False, **kwargs):
     def is_empty(string):
-        return not string or string.isspace()
+        emptyness = not string
+        if not ignore_space:
+            emptyness = emptyness or string.isspace()
+
+        return emptyness
 
     with get_path(file).open(**kwargs) as content:
         content = content.read().split(sep)
         content = list(filter(lambda string: not is_empty(string), content))
 
-        return list(map(str.strip, content))
+        if not ignore_space:
+            content = list(map(str.strip, content))
+        return content
 
 
 def read_xml(file: Union[str, Path], *args, **kwargs):
@@ -298,7 +305,34 @@ def read_json(file: Union[str, Path], *args, **kwargs):
 
 def read_pickle(file: Union[str, Path], *args, **kwargs):
     with get_path(file).open('rb') as content:
-        return pickle.load(content, *args, **kwargs)
+        return pickle.load(content, *args, **kwargs) # nosec - disable B301:pickle check
+
+
+class RenameUnpickler(pickle.Unpickler): # nosec - disable B301:pickle check
+    def __init__(self, file, renaming_mapping, *args, **kwargs):
+        self.renaming_mapping = renaming_mapping
+        super().__init__(file, *args, **kwargs)
+
+    def find_class(self, module, name):
+        renamed_module = module
+        for old_module, new_module in self.renaming_mapping.items():
+            if module.startswith(old_module):
+                if isinstance(new_module, list):
+                    for nm in new_module:
+                        try:
+                            renamed_module = module.replace(old_module, nm, 1)
+                            res = super().find_class(renamed_module, name)
+                            return res
+                        except ModuleNotFoundError:
+                            continue
+                else:
+                    renamed_module = module.replace(old_module, new_module, 1)
+        return super().find_class(renamed_module, name)
+
+
+def read_pickle_with_renaming(file: Union[str, Path], renaming_mapping, *args, **kwargs):
+    with get_path(file).open('rb') as content:
+        return RenameUnpickler(content, renaming_mapping, *args, **kwargs).load()
 
 
 def read_yaml(file: Union[str, Path], *args, **kwargs):
@@ -334,12 +368,12 @@ def get_or_parse_value(item, supported_values=None, default=None, casting_type=f
 
         try:
             return string_to_tuple(item, casting_type=casting_type)
-        except ValueError:
+        except ValueError as value_err:
             message = 'Invalid value "{}", expected {}list of values'.format(
                 item,
                 'one of precomputed: ({}) or '.format(', '.join(supported_values.keys())) if supported_values else ''
             )
-            raise ValueError(message)
+            raise ValueError(message) from value_err
 
     if isinstance(item, (float, int)):
         return (casting_type(item), )
@@ -410,6 +444,13 @@ def add_input_shape_to_meta(meta, shape):
 
 
 def set_image_metadata(annotation, images):
+    image_sizes = get_data_shapes(images)
+    annotation.set_image_size(image_sizes)
+
+    return annotation, images
+
+
+def get_data_shapes(images):
     image_sizes = []
     data = images.data
     if not isinstance(data, list):
@@ -417,9 +458,22 @@ def set_image_metadata(annotation, images):
     for image in data:
         data_shape = np.shape(image) if not np.isscalar(image) else 1
         image_sizes.append(data_shape)
-    annotation.set_image_size(image_sizes)
+    return image_sizes
 
-    return annotation, images
+
+def is_image(data_shape):
+    if len(data_shape) not in [2, 3]:
+        return False
+    if len(data_shape) == 3:
+        if data_shape[-1] not in [1, 3, 4]:
+            return False
+    return True
+
+
+def finalize_image_shape(dst_h, dst_w, initial_shape):
+    if len(initial_shape) == 2:
+        return (dst_h, dst_w)
+    return tuple([dst_h, dst_w] + list(initial_shape[2:]))
 
 
 def find_nearest(array, value, mode=None):
@@ -448,15 +502,15 @@ class OrderedSet(MutableSet):
     def __contains__(self, key):
         return key in self.map
 
-    def add(self, key):
-        if key not in self.map:
+    def add(self, value):
+        if value not in self.map:
             end = self.end
             curr = end[1]
-            curr[2] = end[1] = self.map[key] = [key, curr, end]
+            curr[2] = end[1] = self.map[value] = [value, curr, end]
 
-    def discard(self, key):
-        if key in self.map:
-            key, prev_value, next_value = self.map.pop(key)
+    def discard(self, value):
+        if value in self.map:
+            value, prev_value, next_value = self.map.pop(value)
             prev_value[2] = next_value
             next_value[1] = prev_value
 
@@ -794,7 +848,7 @@ def loadmat(filename):
             fd.seek(curpos - 1)
         return end
 
-    fd = open(filename, 'rb')
+    fd = open(filename, 'rb') # pylint: disable=R1732
 
     fd.seek(124)
     tst_str = fd.read(4)
@@ -857,7 +911,7 @@ def init_telemetry():
     except ImportError:
         return None
     try:
-        telemetry = tm.Telemetry('Accuracy Checker', app_version=__version__)
+        telemetry = tm.Telemetry(tid='UA-17808594-29', app_name='Accuracy Checker', app_version=__version__)
         return telemetry
     except Exception: # pylint:disable=W0703
         return None
@@ -890,3 +944,55 @@ def end_telemetry(tm):
             tm.force_shutdown(1.0)
         except Exception: # pylint:disable=W0703
             pass
+
+
+def parse_partial_shape(partial_shape):
+    ps = str(partial_shape)
+    preprocessed = ps.replace('{', '(').replace('}', ')').replace('?', '-1')
+    if '[' not in preprocessed:
+        preprocessed = preprocessed.replace('(', '').replace(')', '')
+        if '..' in preprocessed:
+            shape_list = []
+            for dim in preprocessed.split(','):
+                if '..' in dim:
+                    shape_list.append(string_to_tuple(dim.replace('..', ','), casting_type=int))
+                else:
+                    shape_list.append(int(dim))
+            return shape_list
+        return string_to_tuple(preprocessed, casting_type=int)
+    shape_list = []
+    s_pos = 0
+    e_pos = len(preprocessed)
+    while s_pos <= e_pos:
+        open_brace = preprocessed.find('[', s_pos, e_pos)
+        if open_brace == -1:
+            shape_list.extend(string_to_tuple(preprocessed[s_pos:], casting_type=int))
+            break
+        if open_brace != s_pos:
+            shape_list.extend(string_to_tuple(preprocessed[:open_brace], casting_type=int))
+        close_brace = preprocessed.find(']', open_brace, e_pos)
+        shape_range = preprocessed[open_brace + 1:close_brace]
+        shape_list.append(string_to_tuple(shape_range, casting_type=int))
+        s_pos = min(close_brace + 2, e_pos)
+    return shape_list
+
+
+def postprocess_output_name(
+    output_name, outputs, suffix=('/sink_port_0', ':0'), additional_mapping=None, raise_error=True
+):
+    suffixes = [suffix] if isinstance(suffix, str) else suffix
+    outputs = outputs[0] if isinstance(outputs, list) else outputs
+    if output_name in outputs:
+        return output_name
+    if additional_mapping and output_name in additional_mapping:
+        return additional_mapping[output_name]
+    for suffix_ in suffixes:
+        if suffix_ in output_name:
+            preprocessed_output_name = output_name.replace(suffix_, '')
+        else:
+            preprocessed_output_name = '{}{}'.format(output_name, suffix_)
+        if preprocessed_output_name in outputs:
+            return preprocessed_output_name
+    if raise_error:
+        raise ValueError('Output name: {} not found'.format(output_name))
+    return output_name

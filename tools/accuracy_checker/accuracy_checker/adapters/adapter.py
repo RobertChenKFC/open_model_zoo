@@ -1,5 +1,5 @@
 """
-Copyright (c) 2018-2021 Intel Corporation
+Copyright (c) 2018-2022 Intel Corporation
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 
 from ..config import BaseField, ConfigValidator, StringField, ConfigError
 from ..dependency import ClassProvider, UnregisteredProviderException
-from ..utils import get_parameter_value_from_config
+from ..utils import get_parameter_value_from_config, postprocess_output_name
 
 
 class Adapter(ClassProvider):
@@ -26,11 +26,11 @@ class Adapter(ClassProvider):
 
     __provider_type__ = 'adapter'
 
-    def __init__(self, launcher_config, label_map=None, output_blob=None):
+    def __init__(self, launcher_config, label_map=None, output_blob=None, additional_output_mapping=None):
         self.launcher_config = launcher_config
         self.output_blob = output_blob
         self.label_map = label_map
-
+        self.additional_output_mapping = additional_output_mapping
         self.validate_config(launcher_config)
         self.configure()
 
@@ -50,6 +50,10 @@ class Adapter(ClassProvider):
 
     def configure(self):
         pass
+
+    def check_output_name(self, output_name, outputs, suffix=('/sink_port_0', ':0')):
+        return postprocess_output_name(
+            output_name, outputs, suffix, self.additional_output_mapping, raise_error=False)
 
     @classmethod
     def validate_config(cls, config, fetch_only=False, uri_prefix='', **kwargs):
@@ -87,7 +91,7 @@ class Adapter(ClassProvider):
 
     def select_output_blob(self, outputs):
         if self.output_blob is None:
-            self.output_blob = next(iter(outputs))
+            self.output_blob = next(iter(outputs)) if isinstance(outputs, dict) else next(iter(outputs[0]))
 
     @classmethod
     def validation_scheme(cls, provider=None):
@@ -106,18 +110,19 @@ class Adapter(ClassProvider):
     def release(self):
         pass
 
+
 class AdapterField(BaseField):
-    def validate(self, entry, field_uri_=None, fetch_only=False, validation_scheme=None):
-        errors_stack = super().validate(entry, field_uri_, fetch_only, validation_scheme)
+    def validate(self, entry, field_uri=None, fetch_only=False, validation_scheme=None):
+        errors_stack = super().validate(entry, field_uri, fetch_only, validation_scheme)
 
         if entry is None:
             return errors_stack
 
-        field_uri_ = field_uri_ or self.field_uri
+        field_uri = field_uri or self.field_uri
         if isinstance(entry, str):
             errors_stack.extend(
                 StringField(choices=Adapter.providers).validate(
-                    entry, field_uri_ or 'adapter', fetch_only=fetch_only, validation_scheme=validation_scheme
+                    entry, field_uri or 'adapter', fetch_only=fetch_only, validation_scheme=validation_scheme
                 )
             )
         elif isinstance(entry, dict):
@@ -125,19 +130,19 @@ class AdapterField(BaseField):
                 type = StringField(choices=Adapter.providers)
 
             dict_adapter_validator = DictAdapterValidator(
-                field_uri_ or 'adapter', on_extra_argument=DictAdapterValidator.IGNORE_ON_EXTRA_ARGUMENT
+                field_uri or 'adapter', on_extra_argument=DictAdapterValidator.IGNORE_ON_EXTRA_ARGUMENT
             )
             errors_stack.extend(dict_adapter_validator.validate(
-                entry, field_uri_ or 'adapter', fetch_only=fetch_only, validation_scheme=validation_scheme
+                entry, field_uri or 'adapter', fetch_only=fetch_only, validation_scheme=validation_scheme
             ))
         else:
             if not fetch_only:
                 errors_stack.append(
                     self.build_error(
-                        entry, field_uri_ or 'adapter', 'adapter must be either string or dictionary', validation_scheme
+                        entry, field_uri or 'adapter', 'adapter must be either string or dictionary', validation_scheme
                     ))
             else:
-                self.raise_error(entry, field_uri_ or 'adapter', 'adapter must be either string or dictionary')
+                self.raise_error(entry, field_uri or 'adapter', 'adapter must be either string or dictionary')
         return errors_stack
 
 

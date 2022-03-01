@@ -19,6 +19,8 @@ import pickle # nosec - disable B403:import-pickle check
 import platform
 from pathlib import Path
 
+import numpy as np
+
 from ..utils import get_path, extract_image_representations, is_path
 from ..dataset import Dataset
 from ..launcher import create_launcher, DummyLauncher, InputFeeder, Launcher
