@@ -32,7 +32,14 @@ class BackgroundMattingConverter(BaseFormatConverter):
                 'image_prefix': StringField(optional=True, default='', description='prefix for images'),
                 'mask_prefix': StringField(optional=True, default='', description='prefix for gt masks'),
                 'image_postfix': StringField(optional=True, default='.png', description='prefix for images'),
-                'mask_postfix': StringField(optional=True, default='.png', description='prefix for gt masks'),
+                'mask_postfix': StringField(optional=True, default='.png',
+                                            description='prefix for gt masks'),
+                "image_pattern": StringField(
+                    optional=True, default="*",
+                    description="pattern that exactly matches all images, "
+                                "excluding the prefix and postfix (if "
+                                "provided)"
+                )
             }
         )
         return configuration_parameters
@@ -45,13 +52,14 @@ class BackgroundMattingConverter(BaseFormatConverter):
         self.mask_prefix = self.get_value_from_config('mask_prefix')
         self.mask_postfix = self.get_value_from_config('mask_postfix')
         self.dataset_meta = self.get_value_from_config('dataset_meta_file')
+        self.image_pattern = self.get_value_from_config("image_pattern")
 
     def convert(self, check_content=False, progress_callback=None, progress_interval=100, **kwargs):
         annotations = []
         mask_name = '{prefix}{base}{postfix}'.format(
             prefix=self.mask_prefix, base='{base}', postfix=self.mask_postfix
         )
-        image_pattern = '*'
+        image_pattern = self.image_pattern
         if self.images_prefix:
             image_pattern = self.images_prefix + image_pattern
         if self.images_postfix:

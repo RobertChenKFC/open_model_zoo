@@ -1376,3 +1376,17 @@ datasets:
     annotation_conversion:
       converter: electricity
       data_path_file: LD2011_2014.txt
+
+  # PFCN dataset added for model meet_segmentation
+  - name: PFCN
+    data_source: PFCN/testing
+    segmentation_masks_source: PFCN/testing
+    annotation_conversion:
+        converter: background_matting
+        images_dir: PFCN/testing
+        masks_dir: PFCN/testing
+        image_pattern: "[0-9][0-9][0-9][0-9][0-9]"
+        image_postfix: .png
+        mask_postfix: _matte.png
+    annotation: pfcn.pickle
+    dataset_meta: pfcn.json
