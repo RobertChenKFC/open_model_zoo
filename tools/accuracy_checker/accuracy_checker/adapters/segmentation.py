@@ -269,7 +269,7 @@ class BackgroundMattingAdapter(Adapter):
                 output = np.exp(output[:, :, 1]) / (
                     np.exp(output[:, :, 0]) + np.exp(output[:, :, 1])
                 )
-            output = (output * 255).astype(np.uint8)
+            output = (np.squeeze(output) * 255).astype(np.uint8)
             result.append(BackgroundMattingPrediction(identifier, output))
 
         return result
