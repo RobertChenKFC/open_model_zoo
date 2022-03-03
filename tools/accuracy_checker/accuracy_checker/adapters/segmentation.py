@@ -239,6 +239,13 @@ class BackgroundMattingAdapter(Adapter):
                 description="Output layer is a binary probability map, "
                             "thus reduce it to a single value for each pixel.",
                 optional=True, default=False
+            ),
+            'probs_first': BoolField(
+                description="The binary probabilities are in the first "
+                            "dimension (CHW) instead of the last (HWC). "
+                            "This option only has an effect if binary_map is "
+                            "also set.",
+                optional=True, default=False
             )
         })
         return parameters
@@ -246,6 +253,7 @@ class BackgroundMattingAdapter(Adapter):
     def configure(self):
         super().configure()
         self.binary_map = self.get_value_from_config("binary_map")
+        self.probs_first = self.get_value_from_config("probs_first")
 
     def process(self, raw, identifiers, frame_meta):
         result = []
@@ -254,6 +262,8 @@ class BackgroundMattingAdapter(Adapter):
         self.select_output_blob(raw_outputs)
         for identifier, output in zip(identifiers, raw_outputs[self.output_blob]):
             if self.binary_map:
+                if self.probs_first:
+                    output = np.transpose(output, axes=(1, 2, 0))
                 prob_max = np.max(output, axis=2, keepdims=True)
                 output -= prob_max
                 output = np.exp(output[:, :, 1]) / (
