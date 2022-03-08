@@ -54,7 +54,13 @@ class TFLiteLauncher(Launcher):
         # otherwise error is raised when other methods are called
         self._input_details = self.model.get_interpreter().get_input_details()
         self._output_details = self.model.get_interpreter().get_output_details()
-        self._inputs = {input_layer['name']: input_layer for input_layer in self._input_details}
+        # We change this to record the input shapes only, as the original
+        # code records all input details, which is not what the property
+        # "inputs" should return
+        self._inputs = {
+            input_layer['name']: input_layer["shape"]
+            for input_layer in self._input_details
+        }
         self.device = '/{}:0'.format(self.config.get('device', 'cpu').lower())
 
     def predict(self, inputs, metadata=None, **kwargs):

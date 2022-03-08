@@ -80,10 +80,10 @@ datasets:
         dst_width: 1024
 
   - name: ms_coco_detection_80_class_without_background
-    data_source: val2017
+    data_source: COCO/val2017
     annotation_conversion:
       converter: mscoco_detection
-      annotation_file: instances_val2017.json
+      annotation_file: COCO/annotations/instances_val2017.json
       has_background: False
       sort_annotations: True
       use_full_label_map: False
