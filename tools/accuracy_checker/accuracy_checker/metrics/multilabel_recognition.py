@@ -264,5 +264,6 @@ class F1Score(PerImageEvaluationMetric):
         if self.calculate_average:
             self.meta['names'].append('average')
         self.meta['scale'] = 1
+        self.meta["data_format"] = "{:.4f}"
         self.meta['postfix'] = ''
         self.meta['calculate_mean'] = False
