@@ -17,7 +17,7 @@ limitations under the License.
 import numpy as np
 
 from ..adapters import Adapter
-from ..config import ConfigValidator, StringField, PathField
+from ..config import ConfigValidator, StringField, PathField, NumberField
 from ..representation import (
     ContainerPrediction,
     RegressionPrediction,
@@ -39,10 +39,28 @@ class HeadPoseEstimatorAdapter(Adapter):
     @classmethod
     def parameters(cls):
         parameters = super().parameters()
+
+        # Extra processing for WHENet, calculating degress from probability
+        # bins.
+        params = dict()
+        for angle in ["pitch", "yaw", "roll"]:
+            params[f"{angle}_bin_size"] = NumberField(
+                description=f"Bin size of the {angle} output. Must be jointly "
+                            f"provided with {angle}_min. If both specified, "
+                            f"calculates {angle} from the probability bins.",
+                optional=True
+            )
+            params[f"{angle}_min"] = NumberField(
+                description=f"Minimum angle of {angle}. Must be jointly "
+                            f"provided with {angle}_bin_size.",
+                optional=True
+            )
+
         parameters.update({
             'angle_yaw': StringField(description="Output layer name for yaw angle."),
             'angle_pitch': StringField(description="Output layer name for pitch angle."),
-            'angle_roll': StringField(description="Output layer name for roll angle.")
+            'angle_roll': StringField(description="Output layer name for roll angle."),
+            **params
         })
         return parameters
 
@@ -60,6 +78,17 @@ class HeadPoseEstimatorAdapter(Adapter):
         self.angle_pitch = self.get_value_from_config('angle_pitch')
         self.angle_roll = self.get_value_from_config('angle_roll')
 
+        self.bin_sizes = dict()
+        self.mins = dict()
+        for angle in ["pitch", "yaw", "roll"]:
+            bin_size = self.get_value_from_config(f"{angle}_bin_size")
+            cur_min = self.get_value_from_config(f"{angle}_min")
+            if (bin_size is None) + (cur_min is None) == 1:
+                raise RuntimeError(f"{angle}_bin_size and {angle}_min must be "
+                                   f"jointly provided.")
+            self.bin_sizes[angle] = bin_size
+            self.mins[angle] = cur_min
+
     def process(self, raw, identifiers, frame_meta):
         """
         Args:
@@ -69,6 +98,10 @@ class HeadPoseEstimatorAdapter(Adapter):
         Returns:
                 list of ContainerPrediction objects
         """
+        def softmax(x):
+            x -= np.max(x)
+            return np.exp(x) / np.sum(np.exp(x))
+
         result = []
         raw_output = self._extract_predictions(raw, frame_meta)
         for identifier, yaw, pitch, roll in zip(
@@ -77,10 +110,28 @@ class HeadPoseEstimatorAdapter(Adapter):
                 raw_output[self.angle_pitch],
                 raw_output[self.angle_roll]
         ):
+            angles = []
+            for angle, output in zip(
+                ["yaw", "pitch", "roll"], [yaw, pitch, roll]
+            ):
+                if angle in self.bin_sizes:
+                    bin_size, cur_min = self.bin_sizes[angle], self.mins[angle]
+                    indices = np.arange(np.size(output)).astype(np.float32)
+                    angle = np.sum(
+                        softmax(output) * indices
+                    ) * bin_size + cur_min
+                    angles.append(angle)
+                else:
+                    angles.append(output[0])
+            yaw, pitch, roll = angles
+
+            # DEBUG
+            print(f"Prediction {identifier}: {angles}")
+
             prediction = ContainerPrediction({
-                'angle_yaw': RegressionPrediction(identifier, yaw[0]),
-                'angle_pitch': RegressionPrediction(identifier, pitch[0]),
-                'angle_roll': RegressionPrediction(identifier, roll[0])
+                'angle_yaw': RegressionPrediction(identifier, yaw),
+                'angle_pitch': RegressionPrediction(identifier, pitch),
+                'angle_roll': RegressionPrediction(identifier, roll)
             })
             result.append(prediction)
 

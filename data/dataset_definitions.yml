@@ -1390,3 +1390,11 @@ datasets:
         mask_postfix: _matte.png
     annotation: pfcn.pickle
     dataset_meta: pfcn.json
+
+  # AFLW2000-3D dataset added for whenet
+  - name: AFLW2000_3D
+    data_source: AFLW2000
+    annotation_conversion:
+        converter: aflw2000_3d_head_pose
+        data_dir: AFLW2000
+    annotation: aflw2000_3d.pickle
