@@ -80,10 +80,6 @@ class AFLW20003DHeadPoseConverter(DirectoryBasedAnnotationConverter):
             # ). Can't seem to find information about the format of this
             # dataset.
             pitch, yaw, roll = np.array(mat["Pose_Para"][:3]) / np.pi * 180
-
-            # DEBUG
-            print(f"Annotation {img_name}: {[yaw, pitch, roll]}")
-
             annotation = ContainerAnnotation({
                 "pitch": RegressionAnnotation(img_name, pitch),
                 "yaw": RegressionAnnotation(img_name, yaw),

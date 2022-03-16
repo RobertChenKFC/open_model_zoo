@@ -124,10 +124,6 @@ class HeadPoseEstimatorAdapter(Adapter):
                 else:
                     angles.append(output[0])
             yaw, pitch, roll = angles
-
-            # DEBUG
-            print(f"Prediction {identifier}: {angles}")
-
             prediction = ContainerPrediction({
                 'angle_yaw': RegressionPrediction(identifier, yaw),
                 'angle_pitch': RegressionPrediction(identifier, pitch),
