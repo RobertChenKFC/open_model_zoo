@@ -1398,3 +1398,15 @@ datasets:
         converter: aflw2000_3d_head_pose
         data_dir: AFLW2000
     annotation: aflw2000_3d.pickle
+
+  # Tiny COCO dataset to crudely evaluate yolo
+  - name: ms_coco_tiny_detection_80_class_without_background
+    data_source: COCO_tiny/val2017
+    annotation_conversion:
+        converter: mscoco_detection
+        annotation_file: COCO_tiny/annotations/instances_val2017.json
+        has_background: False
+        sort_annotations: True
+        use_full_label_map: False
+    annotation: mscoco_tiny_det_80.pickle
+    dataset_meta: mscoco_tiny_det_80.json

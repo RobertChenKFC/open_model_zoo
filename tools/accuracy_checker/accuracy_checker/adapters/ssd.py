@@ -642,7 +642,7 @@ class SSDFaceDetectionAdapter(Adapter):
         for identifier, cur_bounding_boxes in zip(identifiers, bounding_boxes):
             x_mins, y_mins, x_maxs, y_maxs, labels, scores = [], [], [], [], \
                                                              [], []
-            for x_min, x_max, y_min, y_max, confidence in cur_bounding_boxes:
+            for x_min, y_min, x_max, y_max, confidence in cur_bounding_boxes:
                 x_mins.append(x_min)
                 y_mins.append(y_min)
                 x_maxs.append(x_max)
