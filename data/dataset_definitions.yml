@@ -158,9 +158,9 @@ datasets:
   - name: imagenet_1000_classes
     annotation_conversion:
       converter: imagenet
-      annotation_file: val.txt
+      annotation_file: ImageNet/val.txt
     annotation: imagenet1000.pickle
-    data_source: ILSVRC2012_img_val
+    data_source: ImageNet/ILSVRC2012_img_val
     metrics:
       - name: accuracy@top1
         type: accuracy
