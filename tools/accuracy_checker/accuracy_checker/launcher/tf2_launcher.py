@@ -18,7 +18,7 @@ import traceback
 import numpy as np
 
 from .launcher import Launcher
-from ..config import BaseField, ListField, PathField, StringField, ConfigError
+from ..config import BaseField, ListField, PathField, StringField, ConfigError, NumberField
 
 
 class TF2Launcher(Launcher):
@@ -34,6 +34,10 @@ class TF2Launcher(Launcher):
             'inputs': BaseField(optional=True, description="Inputs."),
             'output_names': ListField(
                 allow_empty=False, optional=True, value_type=StringField(), description="Output names."
+            ),
+            "batch": NumberField(
+                default=1,
+                description="Batch size of input."
             )
         })
         return parameters
@@ -110,7 +114,7 @@ class TF2Launcher(Launcher):
 
     @property
     def batch(self):
-        return 1
+        return self.config["batch"]
 
     @property
     def inputs(self):
