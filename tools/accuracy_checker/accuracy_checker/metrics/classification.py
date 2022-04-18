@@ -97,6 +97,10 @@ class ClassificationAccuracy(PerImageEvaluationMetric):
                 annotation.identifier, annotation.label, prediction.top_k(self.top_k), self.name, accuracy,
                 prediction.scores
             )
+
+        # DEBUG
+        print(f"Current accuracy: {self.accuracy.evaluate()}")
+
         return accuracy
 
     def evaluate(self, annotations, predictions):
