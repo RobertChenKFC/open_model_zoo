@@ -19,7 +19,7 @@ import tflite_runtime.interpreter
 from edgetpu_pass.model.tflite_model import TFLiteModel
 from edgetpu_pass.utils.misc import get_num_cpu
 from .launcher import Launcher, ListInputsField
-from ..config import PathField, StringField
+from ..config import PathField, StringField, NumberField
 
 
 class TFLiteLauncher(Launcher):
@@ -34,6 +34,10 @@ class TFLiteLauncher(Launcher):
             # Modified to support Edge TPU
             'device': StringField(choices=('CPU', 'TPU'), optional=True,
                                   description="Device: CPU or TPU."),
+            "batch": NumberField(
+                default=1,
+                description="Batch size of input."
+            )
         })
         return parameters
 
@@ -96,7 +100,8 @@ class TFLiteLauncher(Launcher):
 
     @property
     def batch(self):
-        return 1
+        batch_size = self.config["batch"] if "batch" in self.config else 1
+        return batch_size
 
     @property
     def inputs(self):

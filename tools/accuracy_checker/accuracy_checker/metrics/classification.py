@@ -99,7 +99,8 @@ class ClassificationAccuracy(PerImageEvaluationMetric):
             )
 
         # DEBUG
-        print(f"Current accuracy: {self.accuracy.evaluate()}")
+        print(f"Current accuracy: {self.accuracy.evaluate()} "
+              f"({self.accuracy.accumulator} / {self.accuracy.total_count})")
 
         return accuracy
 
